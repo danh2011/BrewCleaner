@@ -25,7 +25,7 @@ import sys, os, subprocess, importlib.util, time, json, threading, plistlib
 from pathlib import Path
 
 APP_VERSION = "3.0"
-GITHUB_URL  = "https://github.com/yourusername/BrewCleaner"
+GITHUB_URL  = "https://github.com/danh2011/BrewCleaner"
 
 _PREFS_PATH = Path.home() / ".config" / "brewcleaner" / "prefs.json"
 _SNAPS_PATH = Path.home() / ".config" / "brewcleaner" / "snapshots"
