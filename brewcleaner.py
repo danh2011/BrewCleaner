@@ -22,6 +22,7 @@ New in v3.0:
 # ══════════════════════════════════════════════════════════════
 
 import sys, os, subprocess, importlib.util, time, json, threading, plistlib
+import urllib.request, ast
 from pathlib import Path
 
 APP_VERSION = "3.0"
@@ -37,7 +38,7 @@ TOS_LINES = [
     "  •  The authors are NOT liable for data loss or system issues",
     "  •  You use this software entirely at your own risk",
     "  •  Source code is fully open and visible at:",
-    f"     "https://github.com/danh2011/BrewCleaner",
+    f"     {GITHUB_URL}",
 ]
 
 TIPS = [
@@ -64,12 +65,20 @@ def _load_prefs() -> dict:
     try:
         return json.loads(_PREFS_PATH.read_text())
     except Exception:
-        return {"theme": "light", "notifications": True, "auto_refresh": True}
+        return {"theme": "system", "notifications": True, "auto_refresh": True}
 
 
 def _save_prefs(p: dict):
     _PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
     _PREFS_PATH.write_text(json.dumps(p, indent=2))
+
+
+def _sys_is_dark() -> bool:
+    try:
+        r = subprocess.run(["defaults", "read", "-g", "AppleInterfaceStyle"], capture_output=True, text=True, timeout=1)
+        return r.stdout.strip() == "Dark"
+    except Exception:
+        return False
 
 
 # ══════════════════════════════════════════════════════════════
@@ -99,24 +108,31 @@ def _boot() -> bool:
     sw = root.winfo_screenwidth()
     sh = root.winfo_screenheight()
 
+    is_dark = _sys_is_dark()
+    bg_color = "#0D1117" if is_dark else "#EEF2FF"
+    fg_color = "#E6EDF3" if is_dark else "#1A1A2E"
+    fg_dim   = "#8B949E" if is_dark else "#475569"
+    line_col = "#30363D" if is_dark else "#E2E8F0"
+    btn_bg   = "#21262D" if is_dark else "#E2E8F0"
+
     w = _tk.Toplevel(root)
     w.title("BrewCleaner")
     w.overrideredirect(True)
-    w.configure(bg="#0D1117")
+    w.configure(bg=bg_color)
     w.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
     w.lift()
     w.attributes("-topmost", True)
 
     # Header
     _tk.Label(w, text="🍺", font=("Helvetica", 38),
-              bg="#0D1117", fg="#2F81F7").place(x=W//2, y=26, anchor="n")
+              bg=bg_color, fg="#2F81F7").place(x=W//2, y=26, anchor="n")
     _tk.Label(w, text="BrewCleaner",
               font=("Helvetica", 22, "bold"),
-              bg="#0D1117", fg="#E6EDF3").place(x=W//2, y=74, anchor="n")
+              bg=bg_color, fg=fg_color).place(x=W//2, y=74, anchor="n")
     _tk.Label(w, text=f"v{APP_VERSION}  •  The Homebrew Manager",
               font=("Helvetica", 10),
-              bg="#0D1117", fg="#8B949E").place(x=W//2, y=100, anchor="n")
-    _tk.Frame(w, bg="#30363D", height=1).place(x=40, y=122, width=W - 80)
+              bg=bg_color, fg=fg_dim).place(x=W//2, y=100, anchor="n")
+    _tk.Frame(w, bg=line_col, height=1).place(x=40, y=122, width=W - 80)
 
     content_y = 136
     accepted  = [True]
@@ -126,10 +142,10 @@ def _boot() -> bool:
         accepted[0] = False
         status_lbl = _tk.Label(
             w, text="Installing customtkinter…",
-            font=("Helvetica", 12), bg="#0D1117", fg="#8B949E")
+            font=("Helvetica", 12), bg=bg_color, fg=fg_dim)
         status_lbl.place(x=W//2, y=content_y + 8, anchor="n")
 
-        prog_bg  = _tk.Frame(w, bg="#30363D", height=5)
+        prog_bg  = _tk.Frame(w, bg=line_col, height=5)
         prog_bg.place(x=40, y=content_y + 44, width=W - 80)
         prog_bar = _tk.Frame(prog_bg, bg="#2F81F7", height=5, width=1)
         prog_bar.place(x=0, y=0)
@@ -169,10 +185,10 @@ def _boot() -> bool:
 
         prog_bar.place(width=bar_w)
         if installed[0]:
-            status_lbl.configure(text="✓  customtkinter installed", fg="#3FB950")
+            status_lbl.configure(text="✓  customtkinter installed", fg="#3FB950" if is_dark else "#15803D")
         else:
             status_lbl.configure(
-                text="⚠️  Install failed — run:  pip install customtkinter", fg="#F85149")
+                text="⚠️  Install failed — run:  pip install customtkinter", fg="#F85149" if is_dark else "#EF4444")
             w.update()
             time.sleep(3)
             try:
@@ -193,10 +209,10 @@ def _boot() -> bool:
         for i, line in enumerate(TOS_LINES):
             is_url  = line.startswith("     ")
             is_head = i == 0
-            fg  = "#2F81F7" if is_url else ("#E6EDF3" if is_head else "#8B949E")
+            fg  = "#2F81F7" if is_url else (fg_color if is_head else fg_dim)
             fnt = ("Helvetica", 11, "bold") if is_head else ("Helvetica", 10)
             _tk.Label(w, text=line, font=fnt,
-                      bg="#0D1117", fg=fg,
+                      bg=bg_color, fg=fg,
                       anchor="w", justify="left"
                       ).place(x=44, y=content_y + i * 20)
 
@@ -217,7 +233,7 @@ def _boot() -> bool:
                    bd=0, command=on_accept).place(x=44, y=btn_y)
         _tk.Button(w, text="Decline",
                    font=("Helvetica", 11),
-                   bg="#21262D", fg="#8B949E", activebackground="#30363D",
+                   bg=btn_bg, fg=fg_dim, activebackground=line_col,
                    relief="flat", padx=14, pady=7, cursor="hand2",
                    bd=0, command=on_decline).place(x=248, y=btn_y)
 
@@ -419,6 +435,7 @@ class _Splash(ctk.CTkToplevel):
         self._on_done  = on_done
         self._tip_idx  = 0
         self._tip_job: Optional[str] = None
+        self._close_job: Optional[str] = None
 
         self.overrideredirect(True)
         self.configure(fg_color="#0D1117")
@@ -435,7 +452,9 @@ class _Splash(ctk.CTkToplevel):
 
         self._build_ui(W)
         self._rotate_tip()
-        self.after(2500, self._close)
+        
+        self._close_job = self.after(2500, self._close)
+        self._check_for_updates()
 
     def _build_ui(self, W: int):
         ctk.CTkLabel(self, text="🍺", font=ctk.CTkFont(size=40),
@@ -484,6 +503,47 @@ class _Splash(ctk.CTkToplevel):
         if v < 0.96:
             self.after(28, lambda: self._anim_bar(v + 0.013))
 
+    def _check_for_updates(self):
+        def run_check():
+            try:
+                # Raw URL to your script on GitHub
+                url = f"{GITHUB_URL.replace('github.com', 'raw.githubusercontent.com')}/main/brewcleaner.py"
+                req = urllib.request.Request(url, headers={'User-Agent': 'BrewCleaner-App'})
+                
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    remote_code = response.read().decode('utf-8')
+                
+                # Safely parse the remote APP_VERSION
+                remote_version = None
+                for line in remote_code.splitlines():
+                    if line.startswith('APP_VERSION'):
+                        remote_version = str(ast.literal_eval(line.split('=')[1].strip()))
+                        break
+                
+                if remote_version and float(remote_version) > float(APP_VERSION):
+                    # Pause splash screen dismissal
+                    if self._close_job:
+                        self.after_cancel(self._close_job)
+                        
+                    self.after(0, lambda: self._tip_text.configure(
+                        text=f"✨ Downloading update v{remote_version}...", text_color="#3FB950"
+                    ))
+                    
+                    # Overwrite the current script
+                    with open(__file__, 'w', encoding='utf-8') as f:
+                        f.write(remote_code)
+                        
+                    self.after(0, lambda: self._tip_text.configure(text="Restarting..."))
+                    time.sleep(1)
+                    
+                    # Restart the script
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+                    
+            except Exception:
+                pass # Fail silently (e.g., no internet), let splash continue normally
+
+        threading.Thread(target=run_check, daemon=True).start()
+
     def _close(self):
         if self._tip_job:
             try:
@@ -512,9 +572,17 @@ class App(ctk.CTk):
         self.minsize(980, 640)
 
         self._prefs = _load_prefs()
-        theme = self._prefs.get("theme", "light")
-        C.update(_DARK if theme == "dark" else _LIGHT)
-        ctk.set_appearance_mode("Dark" if theme == "dark" else "Light")
+        theme = self._prefs.get("theme", "system")
+        
+        # Apply theme logic
+        if theme == "system":
+            ctk.set_appearance_mode("System")
+            # Fetch the actual resolved mode to apply your custom 'C' dict colors
+            actual_mode = ctk.get_appearance_mode() 
+            C.update(_DARK if actual_mode == "Dark" else _LIGHT)
+        else:
+            ctk.set_appearance_mode(theme.capitalize())
+            C.update(_DARK if theme == "dark" else _LIGHT)
 
         self._init_state()
         self._build()
@@ -2029,19 +2097,21 @@ class App(ctk.CTk):
         theme_row.pack(fill="x", pady=4)
         lf = ctk.CTkFrame(theme_row, fg_color="transparent")
         lf.pack(side="left", fill="x", expand=True, padx=16, pady=14)
-        ctk.CTkLabel(lf, text="🌙  Dark Mode",
+        ctk.CTkLabel(lf, text="🌙  Theme Mode",
                      font=ctk.CTkFont(size=13, weight="bold"),
                      text_color=C["text"], anchor="w").pack(fill="x")
-        ctk.CTkLabel(lf, text="Toggle between light and dark colour scheme",
+        ctk.CTkLabel(lf, text="Switch the app interface appearance",
                      font=ctk.CTkFont(size=11), text_color=C["text2"],
                      anchor="w").pack(fill="x")
-        self._dark_sw = ctk.CTkSwitch(
-            theme_row, text="",
-            fg_color=C["border"], progress_color=C["accent"],
-            command=self._toggle_theme)
-        self._dark_sw.pack(side="right", padx=20)
-        if self._prefs.get("theme") == "dark":
-            self._dark_sw.select()
+                     
+        self._theme_opt = ctk.CTkOptionMenu(
+            theme_row, 
+            values=["System", "Light", "Dark"],
+            fg_color=C["panel"], button_color=C["border"], text_color=C["text"],
+            command=self._change_theme
+        )
+        self._theme_opt.pack(side="right", padx=20)
+        self._theme_opt.set(self._prefs.get("theme", "system").capitalize())
 
         # Behaviour
         self._mini_hdr(p, "Behaviour")
@@ -2122,20 +2192,26 @@ class App(ctk.CTk):
                       fg_color=C["accent"], hover_color=C["accent_h"],
                       command=dlg.destroy).pack(pady=(22, 0))
 
-    def _toggle_theme(self):
+    def _change_theme(self, selection: str):
         if self._task_running:
-            messagebox.showwarning("Task in Progress",
-                                   "Cannot switch themes while a task is running.")
-            if self._prefs.get("theme") == "dark":
-                self._dark_sw.select()
-            else:
-                self._dark_sw.deselect()
+            messagebox.showwarning("Task in Progress", "Cannot switch themes while a task is running.")
+            self._theme_opt.set(self._prefs.get("theme", "system").capitalize())
             return
-        new_dark = bool(self._dark_sw.get())
-        self._prefs["theme"] = "dark" if new_dark else "light"
+            
+        new_theme = selection.lower()
+        self._prefs["theme"] = new_theme
         _save_prefs(self._prefs)
-        C.update(_DARK if new_dark else _LIGHT)
-        ctk.set_appearance_mode("Dark" if new_dark else "Light")
+        
+        # Re-resolve colors and mode
+        if new_theme == "system":
+            ctk.set_appearance_mode("System")
+            actual_mode = ctk.get_appearance_mode()
+            C.update(_DARK if actual_mode == "Dark" else _LIGHT)
+        else:
+            ctk.set_appearance_mode(selection)
+            C.update(_DARK if new_theme == "dark" else _LIGHT)
+            
+        # Rebuild UI
         page             = self._page
         selected         = set(self._selected)
         cask_sel         = set(self._cask_sel)
@@ -2143,10 +2219,13 @@ class App(ctk.CTk):
         installed_set    = set(self._installed_set)
         outdated_set     = set(self._outdated_set)
         pkg_state_loaded = self._pkg_state_loaded
+        
         for w in self.winfo_children():
             w.destroy()
+            
         self._pages = {}
         self._build()
+        
         self._selected         = selected
         self._cask_sel         = cask_sel
         self._custom_pkgs      = custom_pkgs
