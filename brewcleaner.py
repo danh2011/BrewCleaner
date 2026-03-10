@@ -1,20 +1,7 @@
 #!/usr/bin/env python3
 """
 BrewCleaner v3.0  ─  The complete Homebrew manager for macOS
-Single file · auto-bootstraps customtkinter · macOS 10.15+ · Python 3.8+
-
-New in v3.0:
-  • Animated splash screen with rotating tips on every launch
-  • First-run TOS acceptance with GitHub source link
-  • Upgrade Manager  — per-package upgrades, pin/unpin
-  • Services Manager — start/stop/restart brew services
-  • Tap Manager      — list taps, add, untap
-  • Snapshots        — save/restore/Brewfile export+import
-  • Brew Health      — parsed brew doctor output with fix hints
-  • Dependencies     — dep tree + reverse lookup
-  • Cask support     — formulae + casks in Package Store
-  • Orphan removal   — brew autoremove in Clean Brew
-  • System Cleaner removed (out of Homebrew scope)
+Single file · macOS 10.15+ · Python 3.8+
 """
 
 # ══════════════════════════════════════════════════════════════
@@ -25,7 +12,7 @@ import sys, os, subprocess, importlib.util, time, json, threading, plistlib
 import urllib.request, ast
 from pathlib import Path
 
-APP_VERSION = "3.0"
+APP_VERSION = "3.0.1"
 GITHUB_URL  = "https://github.com/danh2011/BrewCleaner"
 
 _PREFS_PATH = Path.home() / ".config" / "brewcleaner" / "prefs.json"
