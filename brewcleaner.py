@@ -37,7 +37,7 @@ TOS_LINES = [
     "  •  The authors are NOT liable for data loss or system issues",
     "  •  You use this software entirely at your own risk",
     "  •  Source code is fully open and visible at:",
-    f"     {GITHUB_URL}",
+    f"     "https://github.com/danh2011/BrewCleaner",
 ]
 
 TIPS = [
