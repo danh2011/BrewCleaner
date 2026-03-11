@@ -12,7 +12,7 @@ import sys, os, subprocess, importlib.util, time, json, threading, plistlib
 import urllib.request, ast
 from pathlib import Path
 
-APP_VERSION = "3.1.1"
+APP_VERSION = "3.1.2"
 GITHUB_URL  = "https://github.com/danh2011/BrewCleaner"
 
 _PREFS_PATH = Path.home() / ".config" / "brewcleaner" / "prefs.json"
@@ -1622,6 +1622,29 @@ class App(ctk.CTk):
                                       "icon": "📦", "conflicts": []})
         self._sq.set("")
 
+    def _load_pkg_state(self):
+        try:
+            # Timeouts increased to allow slow Macs or heavy Homebrew setups to respond
+            r1 = subprocess.run(["brew","list","--formula"], capture_output=True, text=True, timeout=45, env=_BREW_ENV)
+            r2 = subprocess.run(["brew","outdated","--quiet"], capture_output=True, text=True, timeout=60, env=_BREW_ENV)
+            r3 = subprocess.run(["brew","list","--cask"], capture_output=True, text=True, timeout=45, env=_BREW_ENV)
+            r4 = subprocess.run(["brew","outdated","--cask","--quiet"], capture_output=True, text=True, timeout=60, env=_BREW_ENV)
+            
+            self._installed_set  = set(r1.stdout.strip().split())
+            self._outdated_set   = set(r2.stdout.strip().split())
+            self._cask_installed = set(r3.stdout.strip().split())
+            self._cask_outdated  = set(r4.stdout.strip().split())
+            
+            n_out = len(self._outdated_set) + len(self._cask_outdated)
+            self.after(0, lambda: (
+                self._s_out.configure(text=str(n_out),
+                                     text_color=C["warn"] if n_out else C["ok"]),
+                self._refresh_grid()))
+        except subprocess.TimeoutExpired as e:
+            print(f"BrewCleaner background load timed out: {e}")
+        except Exception as e:
+            print(f"BrewCleaner background load error: {e}")
+    
     def _show_full_tree(self):
         self._deps_out.configure(state="normal")
         self._deps_out.delete("1.0", "end")
