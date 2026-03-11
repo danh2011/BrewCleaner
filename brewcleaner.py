@@ -511,6 +511,7 @@ _SPIN = ["⣾","⣽","⣻","⢿","⡿","⣟","⣯","⣷"]
 
 _BREW_ENV: Dict[str, str] = {
     **dict(os.environ),
+    "PATH": "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH", ""), # Inject brew paths
     "HOMEBREW_NO_AUTO_UPDATE":  "1",
     "HOMEBREW_NO_ANALYTICS":    "1",
     "HOMEBREW_NO_ENV_HINTS":    "1",
@@ -741,26 +742,75 @@ class _Splash(ctk.CTkToplevel):
 
         def run_check():
             try:
-                url = (GITHUB_URL
-                       .replace("github.com", "raw.githubusercontent.com")
-                       + "/main/brewcleaner.py")
-                req = urllib.request.Request(
-                    url, headers={"User-Agent": "BrewCleaner-App"})
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    remote_code = resp.read().decode("utf-8")
+                base_url = GITHUB_URL.replace("github.com", "raw.githubusercontent.com")
+                urls_to_try = [
+                    base_url + "/main/brewcleaner.py",
+                    base_url + "/master/brewcleaner.py"
+                ]
+
+                remote_code = None
+                valid_url = None
+                for url in urls_to_try:
+                    try:
+                        req = urllib.request.Request(url, headers={"User-Agent": "BrewCleaner-App"})
+                        with urllib.request.urlopen(req, timeout=5) as resp:
+                            remote_code = resp.read().decode("utf-8")
+                            valid_url = url
+                        break
+                    except Exception:
+                        continue
+
+                if not remote_code:
+                    return
 
                 # Parse APP_VERSION from the remote file safely
                 remote_version: Optional[str] = None
                 for line in remote_code.splitlines():
                     if line.startswith("APP_VERSION"):
-                        remote_version = str(
-                            ast.literal_eval(line.split("=", 1)[1].strip()))
+                        remote_version = str(ast.literal_eval(line.split("=", 1)[1].strip()))
                         break
 
                 if not remote_version:
                     return
                 if _ver_tuple(remote_version) <= _ver_tuple(APP_VERSION):
-                    return   # already up to date
+                    return
+
+                # ── update available ─────────────────────────────────
+                self._updating = True
+
+                self.after(0, lambda: self._tip_text.configure(
+                    text=f"✨  Downloading update v{remote_version}…", text_color="#3FB950"))
+                self.after(0, lambda: self._pbar.set(0.0))
+
+                # Stream download with progress using valid_url
+                with urllib.request.urlopen(
+                        urllib.request.Request(valid_url, headers={"User-Agent": "BrewCleaner-App"}),
+                        timeout=30) as resp:
+                    total   = int(resp.headers.get("Content-Length", 0) or 0)
+                    data    = b""
+                    chunk   = 8192
+                    while True:
+                        piece = resp.read(chunk)
+                        if not piece:
+                            break
+                        data += piece
+                        if total:
+                            self.after(0, lambda p=len(data)/total: self._pbar.set(p * 0.9))
+                    remote_code = data.decode("utf-8")
+
+                # Write updated script
+                with open(__file__, "w", encoding="utf-8") as fh:
+                    fh.write(remote_code)
+                self.after(0, lambda: self._pbar.set(1.0))
+                self.after(0, lambda: self._tip_text.configure(
+                    text="✅  Update complete — restarting…"))
+                time.sleep(1.2)
+                
+                # Safely restart using absolute path
+                os.execv(sys.executable, [sys.executable, os.path.abspath(__file__)] + sys.argv[1:])
+
+            except Exception:
+                self._updating = False
 
                 # ── update available ─────────────────────────────────
                 self._updating = True   # stop poll_ready from closing
@@ -832,10 +882,8 @@ class App(ctk.CTk):
         self._prefs = _load_prefs()
         theme = self._prefs.get("theme", "system")
         
-        # Apply theme logic
         if theme == "system":
             ctk.set_appearance_mode("System")
-            # Fetch the actual resolved mode to apply your custom 'C' dict colors
             actual_mode = ctk.get_appearance_mode() 
             C.update(_DARK if actual_mode == "Dark" else _LIGHT)
         else:
@@ -843,16 +891,20 @@ class App(ctk.CTk):
             C.update(_DARK if theme == "dark" else _LIGHT)
 
         self._init_state()
-        self._build()
-
-        # Event that signals the splash when real startup work is done
+        
+        # Show the splash screen FIRST
         self._probe_done = threading.Event()
-        _Splash(self, on_done=self._on_splash_done, loading_event=self._probe_done)
+        self._splash = _Splash(self, on_done=self._on_splash_done, loading_event=self._probe_done)
 
+        # Defer the heavy UI building by 50ms so the splash renders instantly
+        self.after(50, self._deferred_startup)
+
+    def _deferred_startup(self):
+        self._build()
         if self._prefs.get("auto_refresh", True):
             threading.Thread(target=self._probe, daemon=True).start()
         else:
-            self._probe_done.set()   # no probe — mark done immediately so splash can close
+            self._probe_done.set()  # no probe — mark done immediately so splash can close
 
     def _on_splash_done(self, splash):
         try:
@@ -3154,8 +3206,9 @@ class App(ctk.CTk):
 
     def _probe(self):
         try:
+            # Added env=_BREW_ENV so it has the right PATH
             r = subprocess.run(["brew", "--version"],
-                               capture_output=True, text=True, timeout=8)
+                               capture_output=True, text=True, timeout=8, env=_BREW_ENV)
             if r.returncode == 0:
                 ver = r.stdout.splitlines()[0].replace("Homebrew", "").strip()
                 self._brew_ok = True
