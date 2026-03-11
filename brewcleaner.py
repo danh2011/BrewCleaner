@@ -1622,23 +1622,23 @@ class App(ctk.CTk):
                                       "icon": "📦", "conflicts": []})
         self._sq.set("")
 
-    def _load_pkg_state(self):
-        try:
-            r1 = subprocess.run(["brew","list","--formula"], capture_output=True, text=True, timeout=12, env=_BREW_ENV)
-            r2 = subprocess.run(["brew","outdated","--quiet"], capture_output=True, text=True, timeout=15, env=_BREW_ENV)
-            r3 = subprocess.run(["brew","list","--cask"], capture_output=True, text=True, timeout=12, env=_BREW_ENV)
-            r4 = subprocess.run(["brew","outdated","--cask","--quiet"], capture_output=True, text=True, timeout=15, env=_BREW_ENV)
-            self._installed_set  = set(r1.stdout.strip().split())
-            self._outdated_set   = set(r2.stdout.strip().split())
-            self._cask_installed = set(r3.stdout.strip().split())
-            self._cask_outdated  = set(r4.stdout.strip().split())
-            n_out = len(self._outdated_set) + len(self._cask_outdated)
-            self.after(0, lambda: (
-                self._s_out.configure(text=str(n_out),
-                                     text_color=C["warn"] if n_out else C["ok"]),
-                self._refresh_grid()))
-        except Exception:
-            pass
+    def _show_full_tree(self):
+        self._deps_out.configure(state="normal")
+        self._deps_out.delete("1.0", "end")
+        self._deps_out.configure(state="disabled")
+        self._tw(self._deps_out, "$ brew deps --tree --installed\n\n(This can take a minute or two on systems with many packages...)\n\n")
+        def run():
+            try:
+                # Increased timeout to 120s
+                r = subprocess.run(["brew", "deps", "--tree", "--installed"],
+                                   capture_output=True, text=True, timeout=120, env=_BREW_ENV)
+                out = r.stdout or r.stderr or "(no installed formulae with dependencies)"
+                self.after(0, lambda: self._tw(self._deps_out, out + "\n"))
+            except subprocess.TimeoutExpired:
+                self.after(0, lambda: self._tw(self._deps_out, "⚠️  Command timed out. Homebrew took too long to build the dependency tree.\n"))
+            except Exception as e:
+                self.after(0, lambda: self._tw(self._deps_out, f"⚠️  Error: {e}\n"))
+        threading.Thread(target=run, daemon=True).start()
 
 
     # ══════════════════════════════════════════════════════════
