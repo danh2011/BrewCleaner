@@ -12,7 +12,7 @@ import sys, os, subprocess, importlib.util, time, json, threading, plistlib
 import urllib.request, ast
 from pathlib import Path
 
-APP_VERSION = "3.0.1"
+APP_VERSION = "3.1.0"
 GITHUB_URL  = "https://github.com/danh2011/BrewCleaner"
 
 _PREFS_PATH = Path.home() / ".config" / "brewcleaner" / "prefs.json"
@@ -66,6 +66,224 @@ def _sys_is_dark() -> bool:
         return r.stdout.strip() == "Dark"
     except Exception:
         return False
+
+
+def _get_macos_version() -> tuple:
+    """Returns (major, minor) integers, e.g. (14, 5)."""
+    try:
+        r = subprocess.run(["sw_vers", "-productVersion"], capture_output=True, text=True, timeout=3)
+        parts = r.stdout.strip().split(".")
+        return int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+    except Exception:
+        return (0, 0)
+
+
+def _get_recommended_xcode(mac_major: int, mac_minor: int) -> tuple:
+    """
+    Returns (xcode_version_str, download_url) for the latest Xcode
+    compatible with the given macOS version.
+    Apple's compatibility matrix (as of 2025):
+      Xcode 16 → requires macOS 14.5+
+      Xcode 15 → requires macOS 13.5+
+      Xcode 14 → requires macOS 12.5+
+      Xcode 13 → requires macOS 11.3+
+      Xcode 12 → requires macOS 10.15.4+
+    """
+    DL_ALL = "https://developer.apple.com/download/all/?q=xcode"
+    DL_LATEST = "https://developer.apple.com/xcode/"
+    if mac_major >= 15:
+        return ("16", DL_LATEST)
+    if mac_major == 14:
+        if mac_minor >= 5:
+            return ("16", DL_LATEST)
+        return ("15", f"{DL_ALL}+15")
+    if mac_major == 13:
+        if mac_minor >= 5:
+            return ("15", f"{DL_ALL}+15")
+        return ("14", f"{DL_ALL}+14")
+    if mac_major == 12:
+        if mac_minor >= 5:
+            return ("14", f"{DL_ALL}+14")
+        return ("13", f"{DL_ALL}+13")
+    if mac_major == 11:
+        return ("13", f"{DL_ALL}+13")
+    # macOS 10.15 Catalina
+    return ("12", f"{DL_ALL}+12")
+
+
+def _clt_installed() -> bool:
+    """True if Xcode Command Line Tools are installed."""
+    try:
+        r = subprocess.run(["xcode-select", "-p"], capture_output=True, timeout=4)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+# Alias used in user-edited sections of the file
+_check_clt_installed = _clt_installed
+
+
+def _xcode_install_guidance() -> dict:
+    """
+    Return a dict with Xcode guidance for the current macOS version:
+      major, macos_name, xcode_name, dl_url, note
+    """
+    _MACOS_NAMES = {
+        15: "Sequoia", 14: "Sonoma", 13: "Ventura",
+        12: "Monterey", 11: "Big Sur", 10: "Catalina",
+    }
+    major, minor  = _get_macos_version()
+    xcode_ver, dl = _get_recommended_xcode(major, minor)
+    macos_name    = _MACOS_NAMES.get(major, f"{major}.{minor}")
+    xcode_name    = f"Xcode {xcode_ver} Command Line Tools"
+
+    if major >= 13:
+        note = (f"Run  xcode-select --install  or click 'Install CLT' on the Dashboard.\n"
+                f"Your macOS {macos_name} works with {xcode_name}.")
+    else:
+        note = (f"Your macOS {macos_name} requires {xcode_name}.\n"
+                f"Download it from: {dl}")
+
+    return dict(major=major, minor=minor, macos_name=macos_name,
+                xcode_name=xcode_name, xcode_ver=xcode_ver, dl_url=dl, note=note)
+
+
+def _xcode_app_installed() -> bool:
+    return os.path.exists("/Applications/Xcode.app")
+
+
+def _xcode_install_guidance() -> dict:
+    """
+    Return a dict with guidance for installing/upgrading Xcode CLT,
+    tailored to the user's current macOS version.
+    Keys: xcode_name, macos_name, major, method ("terminal"|"download"), note, dl_url
+    """
+    mac_major, mac_minor = _get_macos_version()
+    xcode_ver, dl_url    = _get_recommended_xcode(mac_major, mac_minor)
+    mac_str              = f"{mac_major}.{mac_minor}" if mac_major else "unknown"
+    # Map major to friendly macOS name
+    names = {15:"Sequoia",14:"Sonoma",13:"Ventura",12:"Monterey",
+             11:"Big Sur",10:"Catalina"}
+    macos_name = names.get(mac_major, f"macOS {mac_major}")
+    if mac_major >= 13:
+        method = "terminal"
+        note   = f"Run in Terminal:  xcode-select --install"
+    else:
+        method = "download"
+        note   = (f"Your Mac (macOS {mac_str}) needs {xcode_ver}.\n"
+                  "Download from: developer.apple.com/download/all/\n"
+                  "(free Apple ID required — search 'Command Line Tools')")
+    return {
+        "xcode_name": xcode_ver,
+        "macos_name": macos_name,
+        "major":      mac_major,
+        "method":     method,
+        "note":       note,
+        "dl_url":     dl_url,
+    }
+
+
+def _check_xcode_boot():
+    """
+    Stdlib-only pre-flight that warns users if Xcode CLT is missing
+    and offers to install it.  Called immediately after _boot().
+    """
+    if _clt_installed():
+        return  # nothing to do
+
+    import tkinter as _tk
+
+    is_dark  = _sys_is_dark()
+    bg_color = "#0D1117" if is_dark else "#FAFAFA"
+    fg_color = "#E6EDF3" if is_dark else "#1A1A2E"
+    fg_dim   = "#8B949E" if is_dark else "#475569"
+    warn_col = "#D29922" if is_dark else "#92400E"
+    sep_col  = "#30363D" if is_dark else "#E2E8F0"
+    btn_bg   = "#21262D" if is_dark else "#E2E8F0"
+
+    mac_major, mac_minor = _get_macos_version()
+    xcode_ver, dl_url    = _get_recommended_xcode(mac_major, mac_minor)
+    mac_str = f"{mac_major}.{mac_minor}" if mac_major else "unknown"
+
+    W, H = 560, 316
+    root = _tk.Tk()
+    root.withdraw()
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+
+    w = _tk.Toplevel(root)
+    w.title("BrewCleaner — Xcode Required")
+    w.overrideredirect(True)
+    w.configure(bg=bg_color)
+    w.geometry(f"{W}x{H}+{(sw - W) // 2}+{(sh - H) // 2}")
+    w.lift()
+    w.attributes("-topmost", True)
+
+    # ── header ───────────────────────────────────────────────
+    _tk.Label(w, text="🍺  BrewCleaner",
+              font=("Helvetica", 15, "bold"), bg=bg_color, fg=fg_color
+              ).place(x=26, y=18)
+    _tk.Frame(w, bg=sep_col, height=1).place(x=26, y=48, width=W - 52)
+
+    # ── warning content ──────────────────────────────────────
+    _tk.Label(w, text="⚠️  Xcode Tools Are Not Installed",
+              font=("Helvetica", 13, "bold"), bg=bg_color, fg=warn_col
+              ).place(x=26, y=58)
+
+    body = (
+        "Homebrew requires Xcode Command Line Tools to compile packages\n"
+        "from source. Many formulae will fail to install without them.\n\n"
+        f"Your macOS {mac_str} is compatible with Xcode {xcode_ver}.\n"
+        "Click below to install the CLT (a system dialog will appear),\n"
+        "or download the full Xcode from the link shown."
+    )
+    _tk.Label(w, text=body,
+              font=("Helvetica", 11), bg=bg_color, fg=fg_dim,
+              anchor="w", justify="left"
+              ).place(x=26, y=86)
+
+    _tk.Label(w, text=f"Full Xcode download:  {dl_url}",
+              font=("Helvetica", 9), bg=bg_color, fg="#2F81F7"
+              ).place(x=26, y=212)
+
+    status_lbl = _tk.Label(w, text="", font=("Helvetica", 10),
+                           bg=bg_color, fg="#3FB950" if is_dark else "#15803D")
+    status_lbl.place(x=26, y=238)
+
+    # ── buttons ──────────────────────────────────────────────
+    def do_install_clt():
+        try:
+            subprocess.Popen(["xcode-select", "--install"])
+            status_lbl.configure(
+                text="System dialog opened — follow the prompts, then relaunch BrewCleaner.")
+        except Exception as exc:
+            status_lbl.configure(text=f"⚠️  Could not launch installer: {exc}", fg="#F85149")
+
+    _tk.Button(w, text="🔧  Install Xcode CLT",
+               font=("Helvetica", 12, "bold"),
+               bg="#2F81F7", fg="white", activebackground="#1F6FEB",
+               relief="flat", padx=16, pady=8, cursor="hand2", bd=0,
+               command=do_install_clt).place(x=26, y=264)
+
+    _tk.Button(w, text="Continue Without Xcode →",
+               font=("Helvetica", 11),
+               bg=btn_bg, fg=fg_dim, activebackground=sep_col,
+               relief="flat", padx=12, pady=8, cursor="hand2", bd=0,
+               command=w.destroy).place(x=220, y=264)
+
+    w.update()
+    while w.winfo_exists():
+        try:
+            root.update()
+        except Exception:
+            break
+        time.sleep(0.02)
+
+    try:
+        root.destroy()
+    except Exception:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════
@@ -253,6 +471,8 @@ def _boot() -> bool:
 if not _boot():
     sys.exit(0)
 
+_check_xcode_boot()   # warn if Xcode CLT missing (stdlib-only, safe to call here)
+
 
 # ══════════════════════════════════════════════════════════════
 #  IMPORTS  (ctk now guaranteed to exist)
@@ -417,12 +637,15 @@ CASKS: Dict[str, List[Dict]] = {
 # ══════════════════════════════════════════════════════════════
 
 class _Splash(ctk.CTkToplevel):
-    def __init__(self, master, on_done: Callable):
+    def __init__(self, master, on_done: Callable, loading_event: threading.Event):
         super().__init__(master)
-        self._on_done  = on_done
-        self._tip_idx  = 0
+        self._on_done       = on_done
+        self._loading_event = loading_event
+        self._tip_idx       = 0
         self._tip_job: Optional[str] = None
-        self._close_job: Optional[str] = None
+        self._updating      = False          # True while downloading an update
+        self._start_time    = time.time()
+        self._MIN_SECS      = 3.5            # minimum splash display seconds
 
         self.overrideredirect(True)
         self.configure(fg_color="#0D1117")
@@ -439,8 +662,6 @@ class _Splash(ctk.CTkToplevel):
 
         self._build_ui(W)
         self._rotate_tip()
-        
-        self._close_job = self.after(2500, self._close)
         self._check_for_updates()
 
     def _build_ui(self, W: int):
@@ -473,7 +694,7 @@ class _Splash(ctk.CTkToplevel):
             height=3, corner_radius=2)
         self._pbar.pack(fill="x", padx=44, pady=(12, 0))
         self._pbar.set(0)
-        self._anim_bar(0.0)
+        self.after(80, self._poll_ready)   # real-load-aware progress
 
     def _rotate_tip(self):
         self._tip_idx = (self._tip_idx + 1) % len(TIPS)
@@ -481,53 +702,111 @@ class _Splash(ctk.CTkToplevel):
         if self.winfo_exists():
             self._tip_icon.configure(text=icon)
             self._tip_text.configure(text=text)
-            self._tip_job = self.after(700, self._rotate_tip)
+            self._tip_job = self.after(2500, self._rotate_tip)   # slow — was 700
 
-    def _anim_bar(self, v: float):
+    def _poll_ready(self):
+        """
+        Drive the progress bar based on actual loading state, then close
+        when both the loading event is set AND the minimum display time
+        has elapsed.  Called every 80 ms via after().
+        """
         if not self.winfo_exists():
             return
-        self._pbar.set(min(v, 0.96))
-        if v < 0.96:
-            self.after(28, lambda: self._anim_bar(v + 0.013))
+        if self._updating:
+            return   # update download in progress — don't interfere
+
+        elapsed = time.time() - self._start_time
+
+        if self._loading_event.is_set():
+            if elapsed >= self._MIN_SECS:
+                # Loading complete + min time served → fill bar and close
+                self._pbar.set(1.0)
+                self.after(1200, self._close)
+                return
+            else:
+                # Done loading but haven't shown splash long enough yet
+                frac = elapsed / self._MIN_SECS
+                self._pbar.set(0.97 + frac * 0.03)   # creep to 1.0
+        else:
+            # Still loading — animate in two phases
+            if elapsed < 2.0:
+                # Fast phase: 0 → 68% over the first 2 s
+                self._pbar.set(min(elapsed / 2.0 * 0.68, 0.68))
+            else:
+                # Slow crawl: 68% → 95%, waiting for real work
+                t = elapsed - 2.0
+                self._pbar.set(min(0.68 + t * 0.014, 0.95))
+
+        self.after(80, self._poll_ready)
 
     def _check_for_updates(self):
+        def _ver_tuple(v: str):
+            """Convert '3.1.2' → (3, 1, 2) for robust comparison."""
+            try:
+                return tuple(int(x) for x in v.strip().split("."))
+            except Exception:
+                return (0,)
+
         def run_check():
             try:
-                # Raw URL to your script on GitHub
-                url = f"{GITHUB_URL.replace('github.com', 'raw.githubusercontent.com')}/main/brewcleaner.py"
-                req = urllib.request.Request(url, headers={'User-Agent': 'BrewCleaner-App'})
-                
-                with urllib.request.urlopen(req, timeout=3) as response:
-                    remote_code = response.read().decode('utf-8')
-                
-                # Safely parse the remote APP_VERSION
-                remote_version = None
+                url = (GITHUB_URL
+                       .replace("github.com", "raw.githubusercontent.com")
+                       + "/main/brewcleaner.py")
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "BrewCleaner-App"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    remote_code = resp.read().decode("utf-8")
+
+                # Parse APP_VERSION from the remote file safely
+                remote_version: Optional[str] = None
                 for line in remote_code.splitlines():
-                    if line.startswith('APP_VERSION'):
-                        remote_version = str(ast.literal_eval(line.split('=')[1].strip()))
+                    if line.startswith("APP_VERSION"):
+                        remote_version = str(
+                            ast.literal_eval(line.split("=", 1)[1].strip()))
                         break
-                
-                if remote_version and float(remote_version) > float(APP_VERSION):
-                    # Pause splash screen dismissal
-                    if self._close_job:
-                        self.after_cancel(self._close_job)
-                        
-                    self.after(0, lambda: self._tip_text.configure(
-                        text=f"✨ Downloading update v{remote_version}...", text_color="#3FB950"
-                    ))
-                    
-                    # Overwrite the current script
-                    with open(__file__, 'w', encoding='utf-8') as f:
-                        f.write(remote_code)
-                        
-                    self.after(0, lambda: self._tip_text.configure(text="Restarting..."))
-                    time.sleep(1)
-                    
-                    # Restart the script
-                    os.execv(sys.executable, [sys.executable] + sys.argv)
-                    
+
+                if not remote_version:
+                    return
+                if _ver_tuple(remote_version) <= _ver_tuple(APP_VERSION):
+                    return   # already up to date
+
+                # ── update available ─────────────────────────────────
+                self._updating = True   # stop poll_ready from closing
+
+                self.after(0, lambda: self._tip_text.configure(
+                    text=f"✨  Downloading update v{remote_version}…",
+                    text_color="#3FB950"))
+                self.after(0, lambda: self._pbar.set(0.0))
+
+                # Stream download with progress
+                with urllib.request.urlopen(
+                        urllib.request.Request(
+                            url, headers={"User-Agent": "BrewCleaner-App"}),
+                        timeout=30) as resp:
+                    total   = int(resp.headers.get("Content-Length", 0) or 0)
+                    data    = b""
+                    chunk   = 8192
+                    while True:
+                        piece = resp.read(chunk)
+                        if not piece:
+                            break
+                        data += piece
+                        if total:
+                            self.after(0, lambda p=len(data)/total:
+                                       self._pbar.set(p * 0.9))
+                    remote_code = data.decode("utf-8")
+
+                # Write updated script
+                with open(__file__, "w", encoding="utf-8") as fh:
+                    fh.write(remote_code)
+                self.after(0, lambda: self._pbar.set(1.0))
+                self.after(0, lambda: self._tip_text.configure(
+                    text="✅  Update complete — restarting…"))
+                time.sleep(1.2)
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+
             except Exception:
-                pass # Fail silently (e.g., no internet), let splash continue normally
+                self._updating = False   # restore normal flow on any failure
 
         threading.Thread(target=run_check, daemon=True).start()
 
@@ -574,10 +853,14 @@ class App(ctk.CTk):
         self._init_state()
         self._build()
 
-        _Splash(self, on_done=self._on_splash_done)
+        # Event that signals the splash when real startup work is done
+        self._probe_done = threading.Event()
+        _Splash(self, on_done=self._on_splash_done, loading_event=self._probe_done)
 
         if self._prefs.get("auto_refresh", True):
             threading.Thread(target=self._probe, daemon=True).start()
+        else:
+            self._probe_done.set()   # no probe — mark done immediately so splash can close
 
     def _on_splash_done(self, splash):
         try:
@@ -852,7 +1135,39 @@ class App(ctk.CTk):
                       command=self._do_install_brew_fresh).pack(anchor="w")
         self._brew_missing_banner.pack_forget()
 
-        self._mini_hdr(p, "Quick Actions")
+        # ── Xcode / CLT warning banner (hidden until probe confirms CLT missing) ──
+        self._xcode_banner = ctk.CTkFrame(
+            p, fg_color="#FFF8E1", corner_radius=10,
+            border_width=1, border_color="#FFD54F")
+        inner_x = ctk.CTkFrame(self._xcode_banner, fg_color="transparent")
+        inner_x.pack(fill="x", padx=16, pady=14)
+        ctk.CTkLabel(inner_x,
+                     text="🛠️  Xcode Command Line Tools are not installed",
+                     font=ctk.CTkFont(size=14, weight="bold"),
+                     text_color="#7B5800").pack(anchor="w")
+        self._xcode_banner_desc = ctk.CTkLabel(
+            inner_x,
+            text="Checking your macOS version for the compatible Xcode CLT…",
+            font=ctk.CTkFont(size=11), text_color="#7B5800",
+            wraplength=680, justify="left")
+        self._xcode_banner_desc.pack(anchor="w", pady=(4, 10))
+        xbf = ctk.CTkFrame(inner_x, fg_color="transparent")
+        xbf.pack(anchor="w")
+        self._xcode_install_btn = ctk.CTkButton(
+            xbf, text="⬇  Install Command Line Tools",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#F59E0B", hover_color="#D97706",
+            text_color="#FFFFFF", height=38, corner_radius=8,
+            command=self._do_install_clt)
+        self._xcode_install_btn.pack(side="left", padx=(0, 8))
+        ctk.CTkButton(xbf, text="📥  Apple Developer Downloads",
+                      font=ctk.CTkFont(size=11),
+                      fg_color="transparent", text_color="#854D0E",
+                      hover_color="#FEF3C7", height=38, corner_radius=8,
+                      command=lambda: subprocess.Popen(
+                          ["open", "https://developer.apple.com/download/all/"])
+                      ).pack(side="left")
+        self._xcode_banner.pack_forget()
         qf = ctk.CTkFrame(p, fg_color="transparent")
         qf.pack(fill="x", pady=(0, 22))
         for i in range(4):
@@ -879,6 +1194,56 @@ class App(ctk.CTk):
         self._home_term.pack(fill="x")
         self._tw(self._home_term, "Ready. Use quick actions above or the sidebar.\n")
         self._pages["home"] = p
+
+    def _show_xcode_banner(self, xcode_ver: str = "", dl_url: str = "",
+                            xapp_ok: bool = False):
+        """Show the Xcode CLT warning banner on the Dashboard."""
+        if not self._xcode_banner.winfo_exists():
+            return
+        mac_maj, mac_min = _get_macos_version()
+        if not xcode_ver:
+            xcode_ver, dl_url = _get_recommended_xcode(mac_maj, mac_min)
+        body = (
+            f"Homebrew needs Xcode CLT to compile packages from source. "
+            f"Your macOS {mac_maj}.{mac_min} is compatible with "
+            f"Xcode {xcode_ver}."
+        )
+        if xapp_ok:
+            body += "\n(Full Xcode.app is installed — run  xcode-select --install  to also add the CLT.)"
+        self._xcode_banner_desc.configure(text=body)
+        self._xcode_banner.pack(fill="x", pady=(8, 0), after=self._brew_missing_banner)
+
+    def _hide_xcode_banner(self):
+        if self._xcode_banner.winfo_exists():
+            self._xcode_banner.pack_forget()
+
+    def _do_install_clt(self):
+        """Trigger Xcode Command Line Tools install appropriate for user's macOS."""
+        guidance = _xcode_install_guidance()
+        major    = guidance["major"]
+        if major >= 13:
+            # Modern macOS: xcode-select --install opens the system dialog
+            msg = (f"This will run:\n\n    xcode-select --install\n\n"
+                   f"A system dialog will appear to install {guidance['xcode_name']} "
+                   f"for macOS {guidance['macos_name']}.\n\n"
+                   "Return to BrewCleaner once installation completes.")
+            if messagebox.askyesno("Install Command Line Tools", msg, icon="info"):
+                subprocess.Popen(["xcode-select", "--install"])
+                messagebox.showinfo(
+                    "Installation Started",
+                    "Follow the system dialog to complete the install.\n"
+                    "BrewCleaner will re-check CLT status on next launch.")
+        else:
+            # Older macOS: must download manually from Apple Developer
+            msg = (f"Your Mac (macOS {major}.x) requires {guidance['xcode_name']}.\n\n"
+                   "Apple only provides older Command Line Tools via download.\n\n"
+                   "1.  Open developer.apple.com/download/all/\n"
+                   "2.  Sign in with a free Apple ID\n"
+                   "3.  Search for  'Command Line Tools'\n"
+                   "4.  Download the version compatible with your macOS\n\n"
+                   "Would you like to open the download page now?")
+            if messagebox.askyesno("Download Command Line Tools", msg, icon="info"):
+                subprocess.Popen(["open", "https://developer.apple.com/download/all/"])
 
     def _do_install_brew_fresh(self):
         if not messagebox.askyesno(
@@ -1967,8 +2332,9 @@ class App(ctk.CTk):
                       command=self._show_uses).grid(row=0, column=2)
 
         ctk.CTkButton(p, text="🌳  Show full installed tree",
-                      fg_color="transparent", text_color=C["text3"],
-                      hover_color=C["accent_bg"], height=30,
+                      fg_color=C["panel"], text_color=C["text2"],
+                      hover_color=C["accent_bg"], border_width=1,
+                      border_color=C["border"], height=30,
                       font=ctk.CTkFont(size=11),
                       command=self._show_full_tree).grid(row=2, column=0, sticky="w", pady=(0, 4))
 
@@ -2092,9 +2458,15 @@ class App(ctk.CTk):
                      anchor="w").pack(fill="x")
                      
         self._theme_opt = ctk.CTkOptionMenu(
-            theme_row, 
+            theme_row,
             values=["System", "Light", "Dark"],
-            fg_color=C["panel"], button_color=C["border"], text_color=C["text"],
+            fg_color=C["accent_bg"],
+            button_color=C["accent"],
+            button_hover_color=C["accent_h"],
+            text_color=C["accent"],
+            dropdown_fg_color=C["panel"],
+            dropdown_text_color=C["text"],
+            dropdown_hover_color=C["accent_bg"],
             command=self._change_theme
         )
         self._theme_opt.pack(side="right", padx=20)
@@ -2150,8 +2522,9 @@ class App(ctk.CTk):
                       command=lambda: subprocess.Popen(["open", GITHUB_URL])
                       ).pack(side="left", padx=(0, 8))
         ctk.CTkButton(btn_row, text="📜  View TOS",
-                      fg_color="transparent", text_color=C["text3"],
-                      hover_color=C["accent_bg"], height=36, corner_radius=8,
+                      fg_color=C["panel"], text_color=C["text2"],
+                      hover_color=C["accent_bg"], border_width=1,
+                      border_color=C["border"], height=36, corner_radius=8,
                       font=ctk.CTkFont(size=12),
                       command=self._show_tos).pack(side="left")
         self._pages["settings"] = p
@@ -2406,6 +2779,18 @@ class App(ctk.CTk):
         if not total:
             messagebox.showinfo("No Selection", "Select at least one package.")
             return
+        # ── Xcode CLT warning ─────────────────────────────────────
+        if not _check_clt_installed():
+            guidance = _xcode_install_guidance()
+            proceed = messagebox.askyesno(
+                "Xcode Command Line Tools Missing",
+                f"Xcode Command Line Tools are NOT installed.\n\n"
+                f"{guidance['note']}\n\n"
+                "Many formulae will fail to compile or install without them.\n\n"
+                "Install CLT first (recommended), or continue anyway?",
+                icon="warning")
+            if not proceed:
+                return
         conflicts: Dict[str, List[str]] = {}
         for pid in self._selected:
             pkg = self._find_pkg(pid)
@@ -2754,6 +3139,7 @@ class App(ctk.CTk):
         except Exception:
             self._brew_ok = False
             self.after(0, self._on_brew_missing)
+            self._probe_done.set()
             return
         try:
             r = subprocess.run(["brew","list","--formula"],
@@ -2773,6 +3159,23 @@ class App(ctk.CTk):
                     text=s, text_color=C["warn"]))
         except Exception:
             pass
+
+        # ── Xcode / CLT check ────────────────────────────────
+        try:
+            clt_ok  = _clt_installed()
+            xapp_ok = _xcode_app_installed()
+            if not clt_ok:
+                mac_maj, mac_min = _get_macos_version()
+                xver, dl         = _get_recommended_xcode(mac_maj, mac_min)
+                self.after(0, lambda v=xver, u=dl, a=xapp_ok:
+                           self._show_xcode_banner(v, u, a))
+            else:
+                self.after(0, self._hide_xcode_banner)
+        except Exception:
+            pass
+
+        # Signal splash that real work is done
+        self._probe_done.set()
 
     def _on_brew_found(self, ver: str):
         if not self._s_brew.winfo_exists():
@@ -2796,6 +3199,35 @@ class App(ctk.CTk):
         for b in self._quick_btns:
             if b.winfo_exists():
                 b.configure(state="disabled", text_color=C["text3"], fg_color=C["panel2"])
+
+    def _show_xcode_banner(self, xcode_ver: str = "", dl_url: str = "",
+                           full_xcode: bool = False):
+        """Show the Xcode CLT warning banner with version-specific text."""
+        if not self._xcode_banner.winfo_exists():
+            return
+        if not xcode_ver:
+            g = _xcode_install_guidance()
+            xcode_ver = g["xcode_name"]
+        mac_major, mac_minor = _get_macos_version()
+        mac_str = f"{mac_major}.{mac_minor}"
+        desc = (
+            f"Homebrew needs Xcode Command Line Tools to compile packages.\n"
+            f"Your macOS {mac_str} is compatible with Xcode {xcode_ver}."
+        )
+        if full_xcode:
+            desc += "\n(Full Xcode.app found — CLT should work; run  xcode-select --install  if brew fails.)"
+        try:
+            self._xcode_banner_desc.configure(text=desc)
+        except Exception:
+            pass
+        self._xcode_banner.pack(fill="x", pady=(6, 0), after=self._stat_cf)
+
+    def _hide_xcode_banner(self):
+        """Hide the Xcode CLT warning banner."""
+        try:
+            self._xcode_banner.pack_forget()
+        except Exception:
+            pass
 
     # ══════════════════════════════════════════════════════════
     #  BREW OPERATIONS  (all blocking — run inside _run_steps)
