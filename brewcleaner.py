@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BrewCleaner v3.0  ─  The complete Homebrew manager for macOS
+BrewCleaner v3.1.1  ─  The complete Homebrew manager for macOS
 Single file · macOS 10.15+ · Python 3.8+
 """
 
@@ -12,7 +12,7 @@ import sys, os, subprocess, importlib.util, time, json, threading, plistlib
 import urllib.request, ast
 from pathlib import Path
 
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.1.1"
 GITHUB_URL  = "https://github.com/danh2011/BrewCleaner"
 
 _PREFS_PATH = Path.home() / ".config" / "brewcleaner" / "prefs.json"
@@ -262,14 +262,10 @@ def _check_xcode_boot():
 
     _tk.Button(w, text="🔧  Install Xcode CLT",
                font=("Helvetica", 12, "bold"),
-               bg="#2F81F7", fg="white", activebackground="#1F6FEB",
-               relief="flat", padx=16, pady=8, cursor="hand2", bd=0,
                command=do_install_clt).place(x=26, y=264)
 
     _tk.Button(w, text="Continue Without Xcode →",
                font=("Helvetica", 11),
-               bg=btn_bg, fg=fg_dim, activebackground=sep_col,
-               relief="flat", padx=12, pady=8, cursor="hand2", bd=0,
                command=w.destroy).place(x=220, y=264)
 
     w.update()
@@ -318,7 +314,6 @@ def _boot() -> bool:
     fg_color = "#E6EDF3" if is_dark else "#1A1A2E"
     fg_dim   = "#8B949E" if is_dark else "#475569"
     line_col = "#30363D" if is_dark else "#E2E8F0"
-    btn_bg   = "#21262D" if is_dark else "#E2E8F0"
 
     w = _tk.Toplevel(root)
     w.title("BrewCleaner")
@@ -431,16 +426,13 @@ def _boot() -> bool:
             accepted[0] = False
             w.destroy()
 
+        # Using default Tkinter buttons to ensure clear visibility across OS themes
         _tk.Button(w, text="✓  I Accept & Continue",
                    font=("Helvetica", 12, "bold"),
-                   bg="#2F81F7", fg="white", activebackground="#1F6FEB",
-                   relief="flat", padx=18, pady=7, cursor="hand2",
-                   bd=0, command=on_accept).place(x=44, y=btn_y)
+                   command=on_accept).place(x=44, y=btn_y)
         _tk.Button(w, text="Decline",
                    font=("Helvetica", 11),
-                   bg=btn_bg, fg=fg_dim, activebackground=line_col,
-                   relief="flat", padx=14, pady=7, cursor="hand2",
-                   bd=0, command=on_decline).place(x=248, y=btn_y)
+                   command=on_decline).place(x=248, y=btn_y)
 
         w.update()
         while w.winfo_exists():
@@ -1107,7 +1099,7 @@ class App(ctk.CTk):
         self._section_hdr(p, "Dashboard", "Homebrew overview & quick actions")
 
         self._stat_cf = ctk.CTkFrame(p, fg_color="transparent")
-        self._stat_cf.pack(fill="x")
+        self._stat_cf.pack(fill="x", padx=8)
         for i in range(4):
             self._stat_cf.grid_columnconfigure(i, weight=1)
         self._s_brew  = self._stat_card(self._stat_cf, "🍺", "Homebrew",  "…", 0)
@@ -1169,7 +1161,7 @@ class App(ctk.CTk):
                       ).pack(side="left")
         self._xcode_banner.pack_forget()
         qf = ctk.CTkFrame(p, fg_color="transparent")
-        qf.pack(fill="x", pady=(0, 22))
+        qf.pack(fill="x", pady=(0, 22), padx=8)
         for i in range(4):
             qf.grid_columnconfigure(i, weight=1)
         self._quick_btns: List[ctk.CTkButton] = []
@@ -1189,8 +1181,10 @@ class App(ctk.CTk):
             b.grid(row=0, column=i, padx=4, sticky="ew")
             self._quick_btns.append(b)
 
-        self._mini_hdr(p, "Output")
-        self._home_term = self._mk_term(p, 200)
+        out_frame = ctk.CTkFrame(p, fg_color="transparent")
+        out_frame.pack(fill="x", padx=8)
+        self._mini_hdr(out_frame, "Output")
+        self._home_term = self._mk_term(out_frame, 200)
         self._home_term.pack(fill="x")
         self._tw(self._home_term, "Ready. Use quick actions above or the sidebar.\n")
         self._pages["home"] = p
@@ -1211,7 +1205,7 @@ class App(ctk.CTk):
         if xapp_ok:
             body += "\n(Full Xcode.app is installed — run  xcode-select --install  to also add the CLT.)"
         self._xcode_banner_desc.configure(text=body)
-        self._xcode_banner.pack(fill="x", pady=(8, 0), after=self._brew_missing_banner)
+        self._xcode_banner.pack(fill="x", pady=(8, 0), padx=8, after=self._brew_missing_banner)
 
     def _hide_xcode_banner(self):
         if self._xcode_banner.winfo_exists():
@@ -1269,12 +1263,16 @@ class App(ctk.CTk):
 
         wb = ctk.CTkFrame(p, fg_color="#FFF8E1", corner_radius=10,
                           border_width=1, border_color="#FFD54F")
-        wb.pack(fill="x", pady=(0, 20))
+        wb.pack(fill="x", pady=(0, 20), padx=8)
         ctk.CTkLabel(wb, text="⚠️  Full Reinstall removes ALL packages and Homebrew itself. "
                      "Select packages to reinstall on the Packages page first.",
                      font=ctk.CTkFont(size=12), text_color="#7B5800",
                      wraplength=700).pack(padx=16, pady=12)
 
+        opt_frame = ctk.CTkFrame(p, fg_color="transparent")
+        opt_frame.pack(fill="x", padx=8)
+        self._mini_hdr(opt_frame, "Options")
+        
         self._clean_vars: Dict[str, tk.BooleanVar] = {}
         OPTIONS = [
             ("locks",   "🔓  Remove Lock / In-Progress Files",
@@ -1290,11 +1288,11 @@ class App(ctk.CTk):
             ("full",    "💣  Full Reinstall  (destructive)",
              "Uninstall every package, remove Homebrew entirely, then reinstall fresh",  False, True),
         ]
-        self._mini_hdr(p, "Options")
+        
         for key, title, desc, default, danger in OPTIONS:
             var = tk.BooleanVar(value=default)
             self._clean_vars[key] = var
-            row = ctk.CTkFrame(p, fg_color=C["panel"], corner_radius=10,
+            row = ctk.CTkFrame(opt_frame, fg_color=C["panel"], corner_radius=10,
                                border_width=1, border_color=C["border"])
             row.pack(fill="x", pady=4)
             lf = ctk.CTkFrame(row, fg_color="transparent")
@@ -1314,7 +1312,7 @@ class App(ctk.CTk):
                       font=ctk.CTkFont(size=14, weight="bold"),
                       fg_color=C["accent"], hover_color=C["accent_h"],
                       height=50, corner_radius=10,
-                      command=self._do_clean).pack(fill="x", pady=(20, 4))
+                      command=self._do_clean).pack(fill="x", pady=(20, 4), padx=8)
         self._pages["clean"] = p
 
     # ══════════════════════════════════════════════════════════
@@ -1381,9 +1379,18 @@ class App(ctk.CTk):
             command=self._do_install)
         self._inst_btn.grid(row=0, column=1)
 
+        self._refresh_pkgs_btn = ctk.CTkButton(
+            toolbar, text="↻  Refresh",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=C["panel"], hover_color=C["accent_bg"],
+            text_color=C["text2"], border_width=1, border_color=C["border"],
+            height=40, width=100, corner_radius=10,
+            command=self._refresh_pkgs_action)
+        self._refresh_pkgs_btn.grid(row=0, column=2, padx=(8, 0))
+
         self._ps = ctk.CTkScrollableFrame(p, fg_color="transparent",
                                           scrollbar_button_color=C["border"])
-        self._ps.grid(row=3, column=0, sticky="nsew")
+        self._ps.grid(row=3, column=0, sticky="nsew", pady=(8,0))
         for i in range(3):
             self._ps.grid_columnconfigure(i, weight=1)
         self._refresh_grid()
@@ -1410,6 +1417,11 @@ class App(ctk.CTk):
             self._search_job = self.after(
                 600, lambda: threading.Thread(
                     target=self._live_brew_search, args=(q,), daemon=True).start())
+
+    def _refresh_pkgs_action(self):
+        self._set_search_status("↻  Refreshing package states…")
+        self._pkg_state_loaded = True
+        threading.Thread(target=self._load_pkg_state, daemon=True).start()
 
     def _live_brew_search(self, q: str):
         self.after(0, lambda: self._set_search_status("🔎  Searching Homebrew…"))
@@ -1513,7 +1525,7 @@ class App(ctk.CTk):
         card = ctk.CTkFrame(self._ps, fg_color=C["panel"], corner_radius=10,
                             border_width=1,
                             border_color=C["accent"] if var.get() else C["border"])
-        card.grid(row=row, column=col, padx=4, pady=4, sticky="nsew")
+        card.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
         inner = ctk.CTkFrame(card, fg_color="transparent")
         inner.pack(fill="both", padx=12, pady=10)
 
@@ -1664,7 +1676,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(self._upgrades_list,
                      text=f"{len(self._outdated_data)} update(s) available",
                      font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color=C["text"]).grid(row=0, column=0, sticky="w", padx=4, pady=(4, 8))
+                     text_color=C["text"]).grid(row=0, column=0, sticky="w", padx=12, pady=(4, 8))
 
         for i, pkg in enumerate(self._outdated_data):
             name    = pkg.get("name", "?")
@@ -1678,7 +1690,7 @@ class App(ctk.CTk):
 
             row = ctk.CTkFrame(self._upgrades_list, fg_color=C["panel"],
                                corner_radius=10, border_width=1, border_color=C["border"])
-            row.grid(row=i+1, column=0, sticky="ew", pady=3)
+            row.grid(row=i+1, column=0, sticky="ew", pady=4, padx=8)
             row.grid_columnconfigure(2, weight=1)
 
             ctk.CTkCheckBox(row, text="", variable=var, width=30,
@@ -1832,7 +1844,7 @@ class App(ctk.CTk):
             sc  = SC.get(svc["status"], C["text3"])
             row = ctk.CTkFrame(self._services_list, fg_color=C["panel"],
                                corner_radius=10, border_width=1, border_color=C["border"])
-            row.grid(row=i, column=0, sticky="ew", pady=3)
+            row.grid(row=i, column=0, sticky="ew", pady=4, padx=8)
             row.grid_columnconfigure(2, weight=1)
             ctk.CTkLabel(row, text="●", font=ctk.CTkFont(size=11),
                          text_color=sc, fg_color="transparent", width=22
@@ -1974,11 +1986,11 @@ class App(ctk.CTk):
             return
         ctk.CTkLabel(self._taps_list, text=f"{len(self._taps_data)} tap(s) installed",
                      font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color=C["text"]).grid(row=0, column=0, sticky="w", padx=4, pady=(4, 8))
+                     text_color=C["text"]).grid(row=0, column=0, sticky="w", padx=12, pady=(4, 8))
         for i, tap in enumerate(self._taps_data):
             row = ctk.CTkFrame(self._taps_list, fg_color=C["panel"],
                                corner_radius=10, border_width=1, border_color=C["border"])
-            row.grid(row=i+1, column=0, sticky="ew", pady=3)
+            row.grid(row=i+1, column=0, sticky="ew", pady=4, padx=8)
             row.grid_columnconfigure(1, weight=1)
             ctk.CTkLabel(row, text="🍺" if tap["official"] else "🧪",
                          font=ctk.CTkFont(size=18), fg_color="transparent"
@@ -2081,11 +2093,11 @@ class App(ctk.CTk):
         ctk.CTkLabel(self._snaps_list,
                      text=f"{len(snaps)} snapshot(s)  —  ~/.config/brewcleaner/snapshots/",
                      font=ctk.CTkFont(size=12, weight="bold"),
-                     text_color=C["text"]).grid(row=0, column=0, sticky="w", padx=4, pady=(4, 8))
+                     text_color=C["text"]).grid(row=0, column=0, sticky="w", padx=12, pady=(4, 8))
         for i, snap in enumerate(snaps):
             row = ctk.CTkFrame(self._snaps_list, fg_color=C["panel"],
                                corner_radius=10, border_width=1, border_color=C["border"])
-            row.grid(row=i+1, column=0, sticky="ew", pady=3)
+            row.grid(row=i+1, column=0, sticky="ew", pady=4, padx=8)
             row.grid_columnconfigure(1, weight=1)
             ctk.CTkLabel(row, text="📸", font=ctk.CTkFont(size=20),
                          fg_color="transparent").grid(row=0, column=0, padx=(14, 10), pady=12)
@@ -2444,8 +2456,10 @@ class App(ctk.CTk):
         self._section_hdr(p, "Settings")
 
         # Appearance
-        self._mini_hdr(p, "Appearance")
-        theme_row = ctk.CTkFrame(p, fg_color=C["panel"], corner_radius=10,
+        opt_frame = ctk.CTkFrame(p, fg_color="transparent")
+        opt_frame.pack(fill="x", padx=8)
+        self._mini_hdr(opt_frame, "Appearance")
+        theme_row = ctk.CTkFrame(opt_frame, fg_color=C["panel"], corner_radius=10,
                                  border_width=1, border_color=C["border"])
         theme_row.pack(fill="x", pady=4)
         lf = ctk.CTkFrame(theme_row, fg_color="transparent")
@@ -2473,7 +2487,7 @@ class App(ctk.CTk):
         self._theme_opt.set(self._prefs.get("theme", "system").capitalize())
 
         # Behaviour
-        self._mini_hdr(p, "Behaviour")
+        self._mini_hdr(opt_frame, "Behaviour")
         for key, title, desc in [
             ("notifications", "🔔  Notifications",
              "Send a macOS notification when operations complete"),
@@ -2481,7 +2495,7 @@ class App(ctk.CTk):
              "Re-check brew status every time BrewCleaner opens"),
         ]:
             var = tk.BooleanVar(value=self._prefs.get(key, True))
-            r = ctk.CTkFrame(p, fg_color=C["panel"], corner_radius=10,
+            r = ctk.CTkFrame(opt_frame, fg_color=C["panel"], corner_radius=10,
                              border_width=1, border_color=C["border"])
             r.pack(fill="x", pady=4)
             lf2 = ctk.CTkFrame(r, fg_color="transparent")
@@ -2498,8 +2512,8 @@ class App(ctk.CTk):
                           ).pack(side="right", padx=20)
 
         # About
-        self._mini_hdr(p, "About")
-        ab = ctk.CTkFrame(p, fg_color=C["panel"], corner_radius=10,
+        self._mini_hdr(opt_frame, "About")
+        ab = ctk.CTkFrame(opt_frame, fg_color=C["panel"], corner_radius=10,
                           border_width=1, border_color=C["border"])
         ab.pack(fill="x", pady=4)
         inn = ctk.CTkFrame(ab, fg_color="transparent")
@@ -2604,7 +2618,7 @@ class App(ctk.CTk):
 
     def _section_hdr(self, parent, title: str, sub: str = ""):
         f = ctk.CTkFrame(parent, fg_color="transparent")
-        f.pack(fill="x", pady=(0, 20))
+        f.pack(fill="x", pady=(0, 20), padx=8)
         ctk.CTkLabel(f, text=title,
                      font=ctk.CTkFont(family=_SF, size=26, weight="bold"),
                      text_color=C["text"]).pack(anchor="w")
@@ -3071,6 +3085,7 @@ class App(ctk.CTk):
         self._sudo_cached  = False
         self._task_dot.configure(text_color=C["text3"])
         self._sb_complete()
+        
         # Reset caches so next page visit fetches fresh data
         self._pkg_state_loaded = False
         self._installed_set    = set()
@@ -3078,6 +3093,17 @@ class App(ctk.CTk):
         self._outdated_loaded  = False
         self._services_loaded  = False
         self._taps_loaded      = False
+        
+        # Auto-refresh if the user is currently parked on a specific data-driven page
+        if self._page == "pkgs":
+            self._refresh_pkgs_action()
+        elif self._page == "upgrades":
+            self._refresh_upgrades()
+        elif self._page == "services":
+            self._refresh_services()
+        elif self._page == "taps":
+            self._refresh_taps()
+
         if self._prefs.get("notifications", True) and _MAC:
             subprocess.Popen(["osascript", "-e",
                               'display notification "All operations complete." '
