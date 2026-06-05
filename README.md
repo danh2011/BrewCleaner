@@ -1,6 +1,7 @@
 # BrewCleaner
 ![MacOS badge](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white) ![python language badge](https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue)
-\nBrewCleaner is open-source software for macOS which helps users to find issues with Homebrew & fix them.
+
+BrewCleaner is open-source software for macOS which helps users to find issues with Homebrew & fix them.
 
 ## Requirements
 BrewCleaner needs the following installed:
