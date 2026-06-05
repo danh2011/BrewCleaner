@@ -19,8 +19,8 @@ TOS_LINES = [
     "  •  Destructive operations (Full Reinstall, etc.) cannot be undone",
     "  •  The authors are NOT liable for data loss or system issues",
     "  •  You use this software entirely at your own risk",
-    "  •  Source code is fully open and visible at:",
     "  •  THIS PROGRAM IS PROVIDED AS IS",
+    "  •  Source code and full license is open-source and visible at:",
     f"     {GITHUB_URL}",
 ]
 
