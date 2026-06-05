@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-BrewCleaner v3.1.1  ─  The complete Homebrew manager for macOS
-Single file · macOS 10.15+ · Python 3.8+
-"""
-
 # ══════════════════════════════════════════════════════════════
 #  PRE-IMPORT CONSTANTS  (stdlib only — used before ctk loads)
 # ══════════════════════════════════════════════════════════════
@@ -12,7 +7,7 @@ import sys, os, subprocess, importlib.util, time, json, threading, plistlib
 import urllib.request, ast
 from pathlib import Path
 
-APP_VERSION = "3.1.2"
+APP_VERSION = "3.1.3"
 GITHUB_URL  = "https://github.com/danh2011/BrewCleaner"
 
 _PREFS_PATH = Path.home() / ".config" / "brewcleaner" / "prefs.json"
@@ -25,15 +20,16 @@ TOS_LINES = [
     "  •  The authors are NOT liable for data loss or system issues",
     "  •  You use this software entirely at your own risk",
     "  •  Source code is fully open and visible at:",
+    "  •  THIS PROGRAM IS PROVIDED AS IS",
     f"     {GITHUB_URL}",
 ]
 
 TIPS = [
     ("💡", "Select multiple packages at once — they all install in a single fast brew call"),
-    ("🚀", "Bottles are pre-compiled binaries — BrewCleaner always prefers them over source"),
+    ("🚀", "Bottles are pre-compiled binaries — they are a lot easier to manage & update"),
     ("⏩", "brew update is skipped automatically if it ran less than an hour ago"),
     ("🧹", "Remove Orphans cleans up unused dependency packages in one click"),
-    ("🔐", "Your sudo password is asked once per session and kept alive silently"),
+    ("🔐", "Your sudo password is asked once per session and kept alive silently for up to a minute"),
     ("📊", "The Progress tab stays live even while you navigate other pages"),
     ("⚡", "7 speed env-vars are set on every brew call — skipping unnecessary pings"),
     ("📸", "Use Snapshots to back up your package list before big changes"),
@@ -41,6 +37,8 @@ TIPS = [
     ("🧪", "Untap stale taps to keep brew update fast and free of clutter"),
     ("🔀", "Use Dependencies to see what a package needs before installing it"),
     ("🩺", "Run Brew Health regularly to catch configuration issues early"),
+    ("🏎", "The speed of BrewCleaner is highly dependent on your system & its internet connection"),
+    ("💻", "An SSD is always faster than a HDD for BrewCleaner"),
 ]
 
 
