@@ -18,15 +18,20 @@ If you need a newer version of Python, please install it via [this link](https:/
 ## Install & Running
 In the Terminal, run the following command to download the app:
 
-`/bin/bash -c "$curl -fsSL https://raw.githubusercontent.com/danh2011/BrewCleaner/scripts/install.sh`
+`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/danh2011/BrewCleaner/main/scripts/install.sh)"`
 
 Then run `brewcleaner` in the terminal.
 
 This will cause Python Launcher to open and BrewCleaner will open onto the TOS page.
 **You have now installed BrewCleaner!**
 
+## Uninstall
+If you decide you would no longer like to use BrewCleaner, uninstall is as easy as install. Just run the following command in the Terminal:
+
+`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/danh2011/BrewCleaner/main/scripts/uninstall.sh)"`
+
 ## Contributing
 We would love if you want to contribute. This began as a solo project when I kept breaking my Homebrew with a slow internet connection and being left with locked par-installed bottles & formulas. I want to make this the best it can be as I (and many others, I'm sure) will genuinely need this. Thank you.
 
 ### License
-BrewCleaner is protected by the GNU General Public License v3. You can view it [here].(https://github.com/danh2011/BrewCleaner/blob/main/LICENSE)
+BrewCleaner is protected by the GNU General Public License v3. You can view it [here](https://github.com/danh2011/BrewCleaner/blob/main/LICENSE).
