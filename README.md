@@ -16,13 +16,11 @@ If you already have any of the Python packages, BrewCleaner will detect this.
 If you need a newer version of Python, please install it via [this link](https://www.python.org/downloads/).
 
 ## Install & Running
-In the Terminal, run the following command to download the script and move it to `Applications`:
+In the Terminal, run the following command to download the app:
 
-    wget https://raw.githubusercontent.com/danh2011/BrewCleaner/refs/heads/main/brewcleaner.py && mv brewcleaner.py /Applications/
+`/bin/bash -c "$curl -fsSL https://raw.githubusercontent.com/danh2011/BrewCleaner/scripts/install.sh`
 
-Then `cd` (change directory) into `Applications` and run  the file via:
-
-    python3 brewcleaner.py
+Then run `brewcleaner` in the terminal.
 
 This will cause Python Launcher to open and BrewCleaner will open onto the TOS page.
 **You have now installed BrewCleaner!**
