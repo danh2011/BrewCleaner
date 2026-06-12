@@ -20,6 +20,7 @@ TOS_LINES = [
     "  •  The authors are NOT liable for data loss or system issues",
     "  •  You use this software entirely at your own risk",
     "  •  THIS PROGRAM IS PROVIDED AS IS",
+    "  •  THIS PROGRAM IS PROVIDED UNDER THE GNU GENERAL PUBLIC LICENSE v3.0"
     "  •  Source code and full license is open-source and visible at:",
     f"     {GITHUB_URL}",
 ]
