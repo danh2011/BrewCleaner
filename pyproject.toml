@@ -1,0 +1,20 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 110
+
+[tool.ruff.lint]
+# Correctness-focused: syntax errors, undefined names, unused imports.
+# Deliberately not opting into the pedantic/style rule sets (style
+# nitpicks aren't worth blocking CI over for a young v4.0 codebase) —
+# note E702/E741 dropped from E7 on purpose: they'd flag pre-existing
+# style choices in code moved verbatim from v3.1.3 during the v4.0
+# mixin split, not anything this pass introduced.
+select = ["E4", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# ui/*.py deliberately uses `from ui._shared import *` (see that
+# file's docstring) so every mixin shares one copy of ctk/tk/colors/
+# the catalogue/etc. — verified safe via tests/test_ui_wiring.py,
+# which actually builds the merged App class and would fail loudly
+# on a genuinely undefined name. F403/F405 are expected noise here.
+"ui/*.py" = ["F403", "F405"]
