@@ -65,7 +65,7 @@ class PackagesMixin:
         toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 4))
         toolbar.grid_columnconfigure(0, weight=1)
         self._sq = tk.StringVar()
-        self._sq.trace("w", self._on_search)
+        self._sq.trace_add("write", self._on_search)
         ctk.CTkEntry(toolbar,
                      placeholder_text="🔍  Search packages — live Homebrew search after 600 ms…",
                      textvariable=self._sq,
